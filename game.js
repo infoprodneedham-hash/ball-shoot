@@ -1,6 +1,8 @@
 // --- Configuration & State ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// Mobile-friendly sizing
 canvas.width = window.innerWidth > 400 ? 400 : window.innerWidth;
 canvas.height = 300;
 
@@ -8,16 +10,17 @@ let score = 0;
 let highScore = localStorage.getItem('hoopsHighScore') || 0;
 let gameState = 'IDLE'; 
 let barValue = 0;
-let barDirection = 1.8; // SLOWED DOWN (was 2.8)
+let barDirection = 1.8; // Slowed down for better playability
 let distance = 'close';
 let timer = 0;
 let screenShake = 0;
 let netAlpha = 0;
 
-let ball = { x: 80, y: 220, startX: 80, startY: 220 };
+// Ball and Physics
+let ball = { x: 100, y: 220, startX: 100, startY: 220 };
 let targetZone = { start: 60, end: 85 };
 
-// --- Audio Controller ---
+// --- Audio Controller (Synthetic Sounds) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
@@ -53,27 +56,27 @@ function drawPlayer(x, y) {
     
     // Head
     ctx.beginPath();
-    ctx.arc(x - 20, y + 10, 8, 0, Math.PI * 2);
+    ctx.arc(x - 25, y + 10, 8, 0, Math.PI * 2);
     ctx.stroke();
     
     // Body
     ctx.beginPath();
-    ctx.moveTo(x - 20, y + 18);
-    ctx.lineTo(x - 20, y + 45);
+    ctx.moveTo(x - 25, y + 18);
+    ctx.lineTo(x - 25, y + 45);
     ctx.stroke();
     
-    // Arms (holding ball)
+    // Arms (reaching toward ball)
     ctx.beginPath();
-    ctx.moveTo(x - 20, y + 25);
-    ctx.lineTo(x - 5, y + 5); // To ball
+    ctx.moveTo(x - 25, y + 25);
+    ctx.lineTo(x - 10, y + 10); 
     ctx.stroke();
     
     // Legs
     ctx.beginPath();
-    ctx.moveTo(x - 20, y + 45);
-    ctx.lineTo(x - 30, y + 65);
-    ctx.moveTo(x - 20, y + 45);
-    ctx.lineTo(x - 10, y + 65);
+    ctx.moveTo(x - 25, y + 45);
+    ctx.lineTo(x - 35, y + 65);
+    ctx.moveTo(x - 25, y + 45);
+    ctx.lineTo(x - 15, y + 65);
     ctx.stroke();
 }
 
@@ -82,16 +85,17 @@ function updateUI() {
 }
 updateUI();
 
-function setDistance(type) {
+// --- Input Handling ---
+window.setDistance = function(type) {
     if (gameState !== 'IDLE') return;
     distance = type;
     ball.startX = (type === 'close') ? 100 : 50;
     ball.x = ball.startX;
     targetZone = (type === 'close') ? { start: 60, end: 85 } : { start: 70, end: 80 };
     playSound('tap');
-}
+};
 
-function handleInput() {
+window.handleInput = function() {
     if (gameState === 'IDLE') {
         playSound('tap');
         gameState = 'POWERING';
@@ -102,32 +106,41 @@ function handleInput() {
         timer = 0;
         processShot();
     }
-}
+};
 
+// --- Physics Logic ---
 function processShot() {
     const isHit = barValue >= targetZone.start && barValue <= targetZone.end;
     
     const animate = () => {
         timer += 0.02; 
         
-        // Linear X movement (Target is 325 for the rim)
-        ball.x = ball.startX + (timer * (325 - ball.startX));
-        
-        // Parabolic Y movement
-        const peakHeight = isHit ? 180 : 260; 
-        ball.y = ball.startY - Math.sin(timer * Math.PI) * peakHeight;
-
-        // If it's a "Hit", make it drop vertically at the very end for better contact
-        if (isHit && timer > 0.9) {
-            ball.x = 325;
-            ball.y += 5; // Slight drop through the hoop
-        }
-
-        if (timer < 1.05) { // Run slightly past 1.0 for the "drop" effect
-            requestAnimationFrame(animate);
+        if (isHit) {
+            // BANK SHOT LOGIC
+            if (timer < 0.85) {
+                // Phase 1: Arc to Backboard
+                ball.x = ball.startX + (timer * (345 - ball.startX));
+                ball.y = ball.startY - Math.sin(timer * Math.PI) * 200;
+            } else if (timer < 1.1) {
+                // Phase 2: Hit Glass and Drop
+                ball.x = 340; 
+                ball.y += 8; 
+            } else {
+                finishShot(true);
+                return;
+            }
         } else {
-            finishShot(isHit);
+            // MISS LOGIC
+            const missX = barValue < targetZone.start ? 280 : 380;
+            ball.x = ball.startX + (timer * (missX - ball.startX));
+            ball.y = ball.startY - Math.sin(timer * Math.PI) * 260;
+            
+            if (timer >= 1) {
+                finishShot(false);
+                return;
+            }
         }
+        requestAnimationFrame(animate);
     };
     animate();
 }
@@ -159,6 +172,7 @@ function resetGame() {
 function draw() {
     ctx.save();
 
+    // Screen Shake Effect
     if (screenShake > 0) {
         ctx.translate(Math.random() * screenShake - screenShake/2, Math.random() * screenShake - screenShake/2);
         screenShake *= 0.85; 
@@ -166,53 +180,54 @@ function draw() {
 
     ctx.clearRect(-50, -50, canvas.width + 100, canvas.height + 100);
     
-    // Background (Sky & Ground)
-    ctx.fillStyle = "#87CEEB";
+    // Scene
+    ctx.fillStyle = "#87CEEB"; // Sky
     ctx.fillRect(0, 0, canvas.width, 220);
-    ctx.fillStyle = "#666";
+    ctx.fillStyle = "#555"; // Court
     ctx.fillRect(0, 220, canvas.width, 80);
 
-    // Draw Hoop
+    // 1. Backboard
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 4;
-    ctx.strokeRect(345, 40, 5, 70); // Backboard
-    
-    // Net
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + netAlpha})`;
+    ctx.strokeRect(345, 40, 5, 70); 
+
+    // 2. Net
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + netAlpha})`;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(310, 90);
-    ctx.lineTo(345, 90);
-    ctx.lineTo(335, 130);
     ctx.lineTo(320, 130);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(345, 90);
+    ctx.lineTo(335, 130);
+    ctx.stroke();
     netAlpha *= 0.9;
 
-    // Draw Player if IDLE or POWERING
+    // 3. Stick Figure (Only when not shooting)
     if (gameState !== 'ANIMATING') {
         drawPlayer(ball.startX, ball.startY - 10);
     }
 
-    // Draw Ball
+    // 4. Ball
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, 12, 0, Math.PI * 2);
     ctx.fillStyle = "#ff8c00";
     ctx.fill();
-    ctx.strokeStyle = "#333";
+    ctx.strokeStyle = "#000";
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Rim (Drawn AFTER ball to simulate it going into the hoop)
+    // 5. Rim (Drawn over ball for depth)
     ctx.fillStyle = "red";
     ctx.fillRect(310, 85, 38, 6); 
 
-    // Draw Power Bar UI
+    // 6. UI Meter
     if (gameState === 'IDLE' || gameState === 'POWERING') {
         const bx = 50, by = 260, bw = 300, bh = 20;
         ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = "#00ff00";
         ctx.fillRect(bx + (targetZone.start * 3), by, (targetZone.end - targetZone.start) * 3, bh);
+        
         if (gameState === 'POWERING') {
             barValue += barDirection;
             if (barValue > 100 || barValue < 0) barDirection *= -1;
