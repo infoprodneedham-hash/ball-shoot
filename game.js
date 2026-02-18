@@ -2,25 +2,27 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Mobile-friendly sizing
 canvas.width = window.innerWidth > 400 ? 400 : window.innerWidth;
 canvas.height = 300;
 
 let score = 0;
 let highScore = localStorage.getItem('hoopsHighScore') || 0;
+let timeLeft = 60;
+let gameActive = true;
+let timerInterval = null;
+
 let gameState = 'IDLE'; 
 let barValue = 0;
-let barDirection = 1.8; // Slowed down for better playability
+let barDirection = 1.8; 
 let distance = 'close';
 let timer = 0;
 let screenShake = 0;
 let netAlpha = 0;
 
-// Ball and Physics
 let ball = { x: 100, y: 220, startX: 100, startY: 220 };
 let targetZone = { start: 60, end: 85 };
 
-// --- Audio Controller (Synthetic Sounds) ---
+// --- Audio Controller ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
@@ -49,34 +51,46 @@ function playSound(type) {
     }
 }
 
+// --- Timer Logic ---
+function startTimer() {
+    if (timerInterval) return;
+    timerInterval = setInterval(() => {
+        if (timeLeft > 0) {
+            timeLeft--;
+            document.getElementById('timerDisplay').innerText = `Time: ${timeLeft}`;
+        } else {
+            endGame();
+        }
+    }, 1000);
+}
+
+function endGame() {
+    gameActive = false;
+    clearInterval(timerInterval);
+    alert(`Game Over! Final Score: ${score}`);
+    location.reload(); // Simple way to reset everything
+}
+
+window.resetHighScore = function() {
+    if (confirm("Reset your best score?")) {
+        localStorage.setItem('hoopsHighScore', 0);
+        highScore = 0;
+        updateUI();
+    }
+};
+
 // --- Visual Helpers ---
 function drawPlayer(x, y) {
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 3;
-    
-    // Head
     ctx.beginPath();
-    ctx.arc(x - 25, y + 10, 8, 0, Math.PI * 2);
+    ctx.arc(x - 25, y + 10, 8, 0, Math.PI * 2); // Head
     ctx.stroke();
-    
-    // Body
     ctx.beginPath();
-    ctx.moveTo(x - 25, y + 18);
-    ctx.lineTo(x - 25, y + 45);
-    ctx.stroke();
-    
-    // Arms (reaching toward ball)
-    ctx.beginPath();
-    ctx.moveTo(x - 25, y + 25);
-    ctx.lineTo(x - 10, y + 10); 
-    ctx.stroke();
-    
-    // Legs
-    ctx.beginPath();
-    ctx.moveTo(x - 25, y + 45);
-    ctx.lineTo(x - 35, y + 65);
-    ctx.moveTo(x - 25, y + 45);
-    ctx.lineTo(x - 15, y + 65);
+    ctx.moveTo(x - 25, y + 18); ctx.lineTo(x - 25, y + 45); // Body
+    ctx.moveTo(x - 25, y + 25); ctx.lineTo(x - 10, y + 10); // Arm
+    ctx.moveTo(x - 25, y + 45); ctx.lineTo(x - 35, y + 65); // Leg L
+    ctx.moveTo(x - 25, y + 45); ctx.lineTo(x - 15, y + 65); // Leg R
     ctx.stroke();
 }
 
@@ -87,7 +101,7 @@ updateUI();
 
 // --- Input Handling ---
 window.setDistance = function(type) {
-    if (gameState !== 'IDLE') return;
+    if (gameState !== 'IDLE' || !gameActive) return;
     distance = type;
     ball.startX = (type === 'close') ? 100 : 50;
     ball.x = ball.startX;
@@ -96,6 +110,9 @@ window.setDistance = function(type) {
 };
 
 window.handleInput = function() {
+    if (!gameActive) return;
+    startTimer(); // Timer starts on first interaction
+    
     if (gameState === 'IDLE') {
         playSound('tap');
         gameState = 'POWERING';
@@ -114,15 +131,11 @@ function processShot() {
     
     const animate = () => {
         timer += 0.02; 
-        
         if (isHit) {
-            // BANK SHOT LOGIC
             if (timer < 0.85) {
-                // Phase 1: Arc to Backboard
                 ball.x = ball.startX + (timer * (345 - ball.startX));
                 ball.y = ball.startY - Math.sin(timer * Math.PI) * 200;
             } else if (timer < 1.1) {
-                // Phase 2: Hit Glass and Drop
                 ball.x = 340; 
                 ball.y += 8; 
             } else {
@@ -130,11 +143,9 @@ function processShot() {
                 return;
             }
         } else {
-            // MISS LOGIC
             const missX = barValue < targetZone.start ? 280 : 380;
             ball.x = ball.startX + (timer * (missX - ball.startX));
             ball.y = ball.startY - Math.sin(timer * Math.PI) * 260;
-            
             if (timer >= 1) {
                 finishShot(false);
                 return;
@@ -171,73 +182,47 @@ function resetGame() {
 // --- Main Draw Loop ---
 function draw() {
     ctx.save();
-
-    // Screen Shake Effect
     if (screenShake > 0) {
         ctx.translate(Math.random() * screenShake - screenShake/2, Math.random() * screenShake - screenShake/2);
         screenShake *= 0.85; 
     }
-
     ctx.clearRect(-50, -50, canvas.width + 100, canvas.height + 100);
-    
-    // Scene
-    ctx.fillStyle = "#87CEEB"; // Sky
-    ctx.fillRect(0, 0, canvas.width, 220);
-    ctx.fillStyle = "#555"; // Court
-    ctx.fillRect(0, 220, canvas.width, 80);
+    ctx.fillStyle = "#87CEEB"; ctx.fillRect(0, 0, canvas.width, 220); // Sky
+    ctx.fillStyle = "#555"; ctx.fillRect(0, 220, canvas.width, 80); // Court
 
     // 1. Backboard
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 4;
     ctx.strokeRect(345, 40, 5, 70); 
 
     // 2. Net
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + netAlpha})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(310, 90);
-    ctx.lineTo(320, 130);
-    ctx.moveTo(345, 90);
-    ctx.lineTo(335, 130);
-    ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + netAlpha})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(310, 90); ctx.lineTo(320, 130); 
+    ctx.moveTo(345, 90); ctx.lineTo(335, 130); ctx.stroke();
     netAlpha *= 0.9;
 
-    // 3. Stick Figure (Only when not shooting)
-    if (gameState !== 'ANIMATING') {
-        drawPlayer(ball.startX, ball.startY - 10);
-    }
+    // 3. Stick Figure
+    if (gameState !== 'ANIMATING') drawPlayer(ball.startX, ball.startY - 10);
 
     // 4. Ball
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, 12, 0, Math.PI * 2);
-    ctx.fillStyle = "#ff8c00";
-    ctx.fill();
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, 12, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff8c00"; ctx.fill();
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
     
-    // 5. Rim (Drawn over ball for depth)
-    ctx.fillStyle = "red";
-    ctx.fillRect(310, 85, 38, 6); 
+    // 5. Rim
+    ctx.fillStyle = "red"; ctx.fillRect(310, 85, 38, 6); 
 
     // 6. UI Meter
     if (gameState === 'IDLE' || gameState === 'POWERING') {
         const bx = 50, by = 260, bw = 300, bh = 20;
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(bx, by, bw, bh);
-        ctx.fillStyle = "#00ff00";
-        ctx.fillRect(bx + (targetZone.start * 3), by, (targetZone.end - targetZone.start) * 3, bh);
-        
+        ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = "#00ff00"; ctx.fillRect(bx + (targetZone.start * 3), by, (targetZone.end - targetZone.start) * 3, bh);
         if (gameState === 'POWERING') {
             barValue += barDirection;
             if (barValue > 100 || barValue < 0) barDirection *= -1;
         }
-        ctx.fillStyle = "white";
-        ctx.fillRect(bx + (barValue * 3), by - 5, 4, bh + 10);
+        ctx.fillStyle = "white"; ctx.fillRect(bx + (barValue * 3), by - 5, 4, bh + 10);
     }
-
     ctx.restore();
     requestAnimationFrame(draw);
 }
-
 draw();
