@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tap Hoops</title>
+    <style>
+        body { margin: 0; text-align: center; background: #222; font-family: sans-serif; color: white; overflow: hidden; }
+        canvas { background: #87CEEB; display: block; margin: 0 auto; border-bottom: 5px solid #555; touch-action: none; }
+        .ui { padding: 10px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; border-radius: 8px; border: none; cursor: pointer; }
+        #shootBtn { width: 80%; height: 60px; background: #ff4500; color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <h2 id="scoreDisplay">Score: 0</h2>
+        <button onclick="setDistance('close')">1pt Shot</button>
+        <button onclick="setDistance('far')">3pt Shot</button>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="ui">
+        <button id="shootBtn" onpointerdown="handleInput()">TAP TO START / SHOOT</button>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
