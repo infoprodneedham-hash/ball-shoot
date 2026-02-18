@@ -13,10 +13,12 @@
 </head>
 <body>
     <div class="ui">
-        <h2 id="scoreDisplay">Score: 0</h2>
-        <button onclick="setDistance('close')">1pt Shot</button>
-        <button onclick="setDistance('far')">3pt Shot</button>
-    </div>
+    <h2 id="scoreDisplay">Score: 0 | Best: 0</h2>
+    <h3 id="timerDisplay">Time: 60</h3>
+    <button onclick="setDistance('close')">1pt Shot</button>
+    <button onclick="setDistance('far')">3pt Shot</button>
+    <button onclick="resetHighScore()" style="background: #555; color: white;">Reset Best</button>
+</div>
     
     <canvas id="gameCanvas"></canvas>
     
@@ -26,4 +28,5 @@
 
     <script src="game.js"></script>
 </body>
+
 </html>
